@@ -108,7 +108,7 @@ function draw(){
  function line(j,m,col){const gr=x.createLinearGradient(0,0,0,h);gr.addColorStop(0,col+'40');gr.addColorStop(1,col+'00');x.beginPath();P.forEach((p,i)=>i?x.lineTo(X(i),Y(p[j],m)):x.moveTo(X(i),Y(p[j],m)));x.strokeStyle=col;x.lineWidth=2;x.stroke();x.lineTo(X(n-1),h-24);x.lineTo(X(0),h-24);x.fillStyle=gr;x.fill()}
  line(1,mv,'#5b8cff');line(2,mr,'#2ee6a6');
  if(anim<1){anim+=.035;requestAnimationFrame(draw)}}
-async function poll(){try{const r=await fetch('https://raw.githubusercontent.com/string-mm-live/string-mm-live.github.io/main/data.json?t='+Date.now(),{cache:'no-store'}).catch(()=>fetch('data.json?'+Date.now(),{cache:'no-store'}));if(r.ok){const nd=await r.json();if(nd.now!==D.now){D=nd;render()}$('lv').textContent='LIVE'}}catch(e){$('lv').textContent='RECONNECTING'}}
+async function poll(){try{const r=await fetch('https://raw.githubusercontent.com/string-mm-live/string-mm-live.github.io/data/data.json?t='+Date.now(),{cache:'no-store'}).catch(()=>fetch('data.json?'+Date.now(),{cache:'no-store'}));if(r.ok){const nd=await r.json();if(nd.now!==D.now){D=nd;render()}$('lv').textContent='LIVE'}}catch(e){$('lv').textContent='RECONNECTING'}}
 render();requestAnimationFrame(frame);addEventListener('resize',()=>{anim=1;draw()});
 if(location.protocol.startsWith('http')){poll();setInterval(poll,POLL)}else $('lv').textContent='SNAPSHOT';
 </script></body></html>

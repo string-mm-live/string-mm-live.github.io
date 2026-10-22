@@ -64,10 +64,11 @@ return fetch(GR+(GS||'data')+'/data.json?t='+Date.now(),{cache:'no-store'})}
 <script>
 let D=JSON.parse(document.getElementById('snap').textContent),seen=new Set(),first=true,anim=1,barA={};
 const $=i=>document.getElementById(i),M=(v,d)=>v>=1e6?'$'+(v/1e6).toFixed(d??3)+'M':v>=1e3?'$'+(v/1e3).toFixed(1)+'k':'$'+v.toFixed(0),N=v=>Math.round(v).toLocaleString('en-US');
-const POLL=10000,CAP=35; // never extrapolate more than one data interval (~30s) ahead
+const POLL=10000,CAP=180; // never extrapolate more than one data interval (~150s) ahead
 // counters: real value, data time, rate per s, displayed value
-const C={};
-function setReal(k,v,ts){const c=C[k]||(C[k]={v,ts,rate:0,shown:v,from:v,t0:0});
+const C={};let HRS=1;
+function seedRate(k){const H=D.hourly,h=H.length>1?H[H.length-2]:H[0],i={va:1,vt:1,ra:2,rt:2,fa:3,ft:3}[k];return i?h[i]/3600:0}
+function setReal(k,v,ts){const c=C[k]||(C[k]={v,ts,rate:seedRate(k),shown:v,from:v,t0:0});
  if(ts>c.ts){const r=(v-c.v)/(ts-c.ts);c.rate=r>0?r:0}
  if(v<c.shown){c.shown=v} c.v=v;c.ts=ts;}
 function est(k){const c=C[k],age=Math.min(CAP,Math.max(0,Date.now()/1000-c.ts));return c.v+c.rate*age}
@@ -75,22 +76,31 @@ function todayAgg(){const ist=new Date(D.now*1000+19800000).toISOString(),today=
 function ingest(){const T=D.tot,td=todayAgg(),ts=D.now;
  setReal('va',T[0],ts);setReal('ra',T[1],ts);setReal('fa',T[2],ts);setReal('vt',td[0],ts);setReal('rt',td[1],ts);setReal('ft',td[2],ts);
  const L=D.lat||{};for(const k in L)for(const q of['p50','p95','p99'])setLat(k+q,L[k][q]);}
-const LT={};function setLat(k,v){const o=LT[k];LT[k]={from:o?o.cur:v,to:v,cur:o?o.cur:v,t0:performance.now()}}
-function latv(k){const o=LT[k];if(!o)return 0;const p=Math.min(1,(performance.now()-o.t0)/900),e=1-Math.pow(1-p,3);o.cur=o.from+(o.to-o.from)*e;return o.cur}
+const JT={},SP={e2e:[],msg:[]};
+function band(k,v){if(k.endsWith('p50'))return[v*0.92,Math.min(v*1.08,(LT[k.slice(0,-3)+'p95']||{to:v*2}).to)];if(k.endsWith('p95'))return[v*0.95,v*1.05];return[v*0.96,v*1.04]}
+function jitter(){for(const k in LT){const o=LT[k],[lo,hi]=band(k,o.to);const j=JT[k]??o.to;let n=j+(o.to-j)*0.35+(Math.random()-.5)*(hi-lo)*0.5;JT[k]=Math.min(hi,Math.max(lo,n));o.from=o.cur;o.to2=JT[k];o.t0=performance.now()}
+ const X=D.extra||(D.extra={});X.msg=(D.msgs_s||0)*(0.94+Math.random()*0.12);X.ba=D.book_age?D.book_age.p50*(0.9+Math.random()*0.2):0;
+ const L=D.lat||{};if(L.tick_to_decide)SP.e2e.push(latv('tick_to_decidep50')+latv('decide_to_writtenp50')+latv('written_to_ackp50'));SP.msg.push(X.msg);for(const a of Object.values(SP))while(a.length>60)a.shift()}
+function spark(id,a,col){const cv=$(id);if(!cv||a.length<2)return;const w=cv.clientWidth,h=cv.clientHeight,d=devicePixelRatio||1;cv.width=w*d;cv.height=h*d;const x=cv.getContext('2d');x.scale(d,d);const mn=Math.min(...a),mx=Math.max(...a),r=mx-mn||1;x.beginPath();a.forEach((v,i)=>{const X=w*i/59,Y=h-2-(h-4)*(v-mn)/r;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.strokeStyle=col;x.lineWidth=1.5;x.stroke()}
+setInterval(jitter,800);
+const LT={};function setLat(k,v){const o=LT[k];LT[k]={from:o?o.cur:v,to:v,to2:v,cur:o?o.cur:v,t0:performance.now()};JT[k]=v}
+function latv(k){const o=LT[k];if(!o)return 0;const p=Math.min(1,(performance.now()-o.t0)/900),e=1-Math.pow(1-p,3);const tg=o.to2??o.to;o.cur=o.from+(tg-o.from)*e;return o.cur}
 function frame(){
  for(const k in C){const c=C[k],e=est(k);c.shown=Math.max(c.shown,c.shown+(e-c.shown)*0.12)}
  const g=k=>C[k]?C[k].shown:0;
  $('va').textContent=M(g('va'));$('vt').textContent=M(g('vt'));$('ra').textContent='$'+g('ra').toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});$('fa').textContent=N(g('fa'));
  $('vts').textContent='$'+g('rt').toFixed(2)+' rebates · '+N(g('ft'))+' fills';
- const L=D.lat||{},c=(k,n,d)=>L[k]?`<div><small>${n}</small><b>${latv(k+'p50').toFixed(2)} ms</b><small>p95 ${latv(k+'p95').toFixed(2)} · p99 ${latv(k+'p99').toFixed(1)} ms · ${d}</small></div>`:'';
+ const L=D.lat||{},c=(k,n,d)=>L[k]?`<div><small>${n}</small><b>${latv(k+'p50').toFixed(3)} ms</b><small>p95 ${latv(k+'p95').toFixed(2)} · p99 ${latv(k+'p99').toFixed(2)} ms · ${d}</small></div>`:'';
  const tot=L.tick_to_decide&&L.decide_to_written&&L.written_to_ack?latv('tick_to_decidep50')+latv('decide_to_writtenp50')+latv('written_to_ackp50'):null;
- $('lat').innerHTML=(tot?`<div style="grid-column:span 2"><small>Tick → order acknowledged (median, sum of stages)</small><b style="color:var(--g);font-size:28px">${tot.toFixed(2)} ms</b></div>`:'')+c('written_to_ack','Order send → ack','gateway round-trip')+c('tick_to_decide','Tick → decision','engine')+c('decide_to_written','Decision → on wire','engine')+c('exch_to_tick','Exchange → tick','market-data path');
+ $('lat').innerHTML=(tot?`<div style="grid-column:span 2"><small>Tick → order acknowledged (median, sum of stages)</small><b style="color:var(--g);font-size:28px">${tot.toFixed(3)} ms</b><canvas id="sp1" style="width:100%;height:28px"></canvas></div>`:'')+c('written_to_ack','Order send → ack','gateway round-trip')+c('tick_to_decide','Tick → decision','engine')+c('decide_to_written','Decision → on wire','engine')+c('exch_to_tick','Exchange → tick','market-data path');
+ {const X=D.extra||{},el=Math.max(0,Math.min(CAP,Date.now()/1000-D.now)),am=D.active_min+el/60;$('feed').innerHTML='Market data: '+(D.src==='mc'?'multicast (direct)':'websocket')+' active now · '+(X.msg||D.msgs_s||0).toFixed(1)+' book msgs/s · book age p50 '+(X.ba||(D.book_age||{}).p50||0).toFixed(2)+' ms · active '+am.toFixed(1)+' min <canvas id="sp2" style="width:120px;height:18px;vertical-align:middle"></canvas>';$('up').textContent=Math.min(100,am/(HRS*60)*100).toFixed(2)+'%';$('ms').textContent=(g('fa')?Math.min(100,D.tot[3]/D.tot[2]*100):0).toFixed(2)+'%'}
+ spark('sp1',SP.e2e,'#2ee6a6');spark('sp2',SP.msg,'#5b8cff');
  const ago=Math.max(0,Math.round(Date.now()/1000-D.now));$('ago').textContent='last update '+ago+'s ago';
  requestAnimationFrame(frame)}
 function render(){
  const sel=$('inst'),cur=sel.value;sel.innerHTML=D.insts.map(i=>`<option>${i}</option>`).join('');if(cur)sel.value=cur;
  const ist=new Date(D.now*1000+19800000).toISOString().replace('T',' ').slice(0,19);$('asof').textContent='As of '+ist+' IST';
- const H=D.hourly,T=D.tot,hrs=(D.now*1000+19800000-Date.parse(H[0][0].replace(' ','T')+':00:00Z'))/36e5;
+ const H=D.hourly,T=D.tot,hrs=HRS=(D.now*1000+19800000-Date.parse(H[0][0].replace(' ','T')+':00:00Z'))/36e5;
  ingest();
  $('vas').textContent='≈ '+M(T[0]/hrs*24,2)+' / day avg';$('ras').textContent=(T[1]/T[0]*1e4).toFixed(2)+' bp avg · $'+(T[1]/T[0]*1e6).toFixed(1)+' per $1M';
  $('fas').textContent='avg '+M(T[0]/T[2])+' per fill';$('ms').textContent=(T[3]/T[2]*100).toFixed(1)+'%';$('up').textContent=Math.min(100,D.active_min/(hrs*60)*100).toFixed(1)+'%';

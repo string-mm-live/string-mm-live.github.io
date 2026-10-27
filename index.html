@@ -51,7 +51,6 @@ tr.nb,tr.ns{animation:sl .45s ease-out}@keyframes sl{from{transform:translateY(-
 <div class="card"><h2>Execution latency</h2><div class="lat" id="lat"></div>
 <div class="s" style="color:var(--mu);font-size:12px;margin-top:10px" id="feed"></div></div>
 </div>
-<div class="card" style="margin-top:14px"><h2>Live legs · open quotes, position &amp; volume</h2><div id="legs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px"></div></div>
 <div class="card" style="margin-top:14px"><h2>Live trade tape · last 200 fills</h2><div class="tape"><table><thead><tr><th>Time (IST)</th><th>Instrument</th><th>Side</th><th>Price</th><th>Size (USD)</th><th>Rebate (USD)</th><th>Rebate (bp)</th></tr></thead><tbody id="tb"></tbody></table></div></div>
 <footer>Real exchange fills from the desk's execution logs. Rebate = maker fee credit per fill as recorded by the exchange, converted to USD at fill price. Latency = engine-side percentiles over the last 5,000 events. Times in IST (UTC+5:30).</footer>
 </div>
@@ -74,8 +73,6 @@ function setReal(k,v,ts){const c=C[k]||(C[k]={v,ts,rate:seedRate(k),shown:v,from
  if(v<c.shown){c.shown=v} c.v=v;c.ts=ts;}
 function est(k){const c=C[k],age=Math.min(CAP,Math.max(0,Date.now()/1000-c.ts));return c.v+c.rate*age}
 function todayAgg(){const ist=new Date(D.now*1000+19800000).toISOString(),today=ist.slice(0,10);let a=[0,0,0];D.hourly.forEach(h=>{if(h[0].startsWith(today)){a[0]+=h[1];a[1]+=h[2];a[2]+=h[3]}});return a}
-function renderLegs(){const el=$('legs');if(!el)return;const f=(x,d=0)=>x==null?'–':Number(x).toLocaleString('en-US',{maximumFractionDigits:d});
-el.innerHTML=(D.legs||[]).map(g=>`<div style="background:#0b1019;border:1px solid var(--line);border-radius:10px;padding:10px"><b>${g.i}</b> <small style="color:${g.live?'var(--g)':'var(--mu)'}">${g.live?'● live':'idle'}</small><br><small>Position $${f(g.pos_usd)} · mid ${f(g.mid,1)} · today $${f(g.vol_today)} on ${g.fills_today} fills · last fill ${g.last_fill?g.last_fill.slice(11,19):'–'}</small><table style="margin-top:6px"><thead><tr><th>Side</th><th>Price</th><th>Size (USD)</th><th>Updated</th></tr></thead><tbody>${g.quotes.length?g.quotes.map(q=>`<tr><td style="color:${q.s==='bid'?'var(--g)':'#f87171'}">${q.s}</td><td>${f(q.p,1)}</td><td>${f(q.u)}</td><td>${q.t}</td></tr>`).join(''):'<tr><td colspan=4 style="color:var(--mu)">no resting quote at snapshot</td></tr>'}</tbody></table></div>`).join('')}
 function ingest(){const T=D.tot,td=todayAgg(),ts=D.now;
  setReal('va',T[0],ts);setReal('ra',T[1],ts);setReal('fa',T[2],ts);setReal('vt',td[0],ts);setReal('rt',td[1],ts);setReal('ft',td[2],ts);
  const L=D.lat||{};for(const k in L)for(const q of['p50','p95','p99'])setLat(k+q,L[k][q]);}
@@ -102,7 +99,7 @@ function frame(){
  requestAnimationFrame(frame)}
 function render(){
  const sel=$('inst'),cur=sel.value;sel.innerHTML=D.insts.map(i=>`<option>${i}</option>`).join('');if(cur)sel.value=cur;
- const ist=new Date(D.now*1000+19800000).toISOString().replace('T',' ').slice(0,19);renderLegs();$('asof').textContent='As of '+ist+' IST';
+ const ist=new Date(D.now*1000+19800000).toISOString().replace('T',' ').slice(0,19);$('asof').textContent='As of '+ist+' IST';
  const H=D.hourly,T=D.tot,hrs=HRS=(D.now*1000+19800000-Date.parse(H[0][0].replace(' ','T')+':00:00Z'))/36e5;
  ingest();
  $('vas').textContent='≈ '+M(T[0]/hrs*24,2)+' / day avg';$('ras').textContent=(T[1]/T[0]*1e4).toFixed(2)+' bp avg · $'+(T[1]/T[0]*1e6).toFixed(1)+' per $1M';

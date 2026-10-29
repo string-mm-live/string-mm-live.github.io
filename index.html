@@ -97,7 +97,8 @@ function piDraw(g){const now=performance.now();if(now-piT<500)return;piT=now;con
  const dv=Math.max(0,g('va')-D.tot[0]),dr=Math.max(0,g('ra')-D.tot[1]),df=Math.max(0,g('fa')-D.tot[2]);
  let fs=0;const rows=ks.map(k=>{const a=P[k],s=ws?w[k]/ws:0,f=Math.round(a[2]+df*s);fs+=f;return[k,a[0]+dv*s,a[1]+dr*s,f]});
  const VT=g('va')||D.tot[0]||1,FT=Math.round(g('fa'));if(rows.length)rows[0][3]+=FT-fs;
- const lf=k=>{const l=(D.per_inst_last||{})[k];return l?(live(k)?'<span class="buy">● live</span> '+l.slice(11,16):'paused · '+l.slice(8,10)+'/'+l.slice(5,7)+' '+l.slice(11,16)):'–'};
+ const ST=D.per_inst_status,run=k=>ST?!!(ST[k]&&ST[k].live):live(k);/* 29 Oct status fix: live = engine process running + fresh state.json (per_inst_status from agg); last fill shown alongside */
+ const lf=k=>{const l=(D.per_inst_last||{})[k];if(!l)return run(k)?'<span class="buy">● live</span> –':'–';return (run(k)?'<span class="buy">● live</span> '+l.slice(11,16):'paused · '+l.slice(8,10)+'/'+l.slice(5,7)+' '+l.slice(11,16))};
  $('pi').innerHTML=rows.map(([k,v,r,f])=>`<tr><td>${k}</td><td>${M(v,3)}</td><td>${(v/VT*100).toFixed(2)}%</td><td>${N(f)}</td><td class="buy">+${N(r)}</td><td>${lf(k)}</td></tr>`).join('')+`<tr><td><b>Total</b></td><td><b>${M(VT,3)}</b></td><td>100%</td><td><b>${N(FT)}</b></td><td class="buy"><b>+${N(g('ra'))}</b></td><td></td></tr>`}
 function frame(){
  for(const k in C){const c=C[k],e=est(k);c.shown=Math.max(c.shown,c.shown+(e-c.shown)*0.12)}

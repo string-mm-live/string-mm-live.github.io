@@ -52,6 +52,7 @@ tr.nb,tr.ns{animation:sl .45s ease-out}@keyframes sl{from{transform:translateY(-
 <div class="card"><h2>Execution latency</h2><div class="lat" id="lat"></div>
 <div class="s" style="color:var(--mu);font-size:12px;margin-top:10px" id="feed"></div></div>
 </div>
+<div class="card" style="margin-top:14px"><h2>Server latency · new dedicated server vs dc1 (BTC-PERP engine)</h2><div id="srv" style="overflow-x:auto"></div><div class="s" style="color:var(--mu);font-size:12px;margin-top:8px" id="srvn"></div></div>
 <div class="card" style="margin-top:14px"><h2>Live trade tape · last 200 fills</h2><div class="tape"><table><thead><tr><th>Time (IST)</th><th>Instrument</th><th>Side</th><th>Price</th><th>Size (USD)</th><th>Rebate (USD)</th><th>Rebate (bp)</th></tr></thead><tbody id="tb"></tbody></table></div></div>
 <footer>Real exchange fills from the desk's execution logs. Rebate = maker fee credit per fill as recorded by the exchange, converted to USD at fill price. Latency = engine-side percentiles over the last 5,000 events. Times in IST (UTC+5:30).</footer>
 </div>
@@ -112,6 +113,15 @@ function frame(){
  spark('sp1',SP.e2e,'#2ee6a6');spark('sp2',SP.msg,'#5b8cff');
  const ago=Math.max(0,Math.round(Date.now()/1000-D.now));$('ago').textContent='last update '+ago+'s ago';
  requestAnimationFrame(frame)}
+function srvRender(){const S=D.srv,el=$('srv');if(!el)return;if(!S){el.innerHTML='<small style="color:var(--mu)">No server latency data yet.</small>';return}
+ const ist=t=>t?new Date(t*1000+19800000).toISOString().replace('T',' ').slice(0,16):'–',f=(v,d)=>v==null?'–':(+v).toFixed(d),cs=Date.now()/1000-S.polled>300;
+ const row=(k,name)=>{const x=S[k];if(!x)return `<tr><td>${name}</td><td colspan="7" style="color:var(--mu)">no data (poll failed)</td></tr>`;const L=x.lat||{},t=L.tick_to_decide||{},a=L.written_to_ack||{},live=x.live&&!cs&&!x.poll_failed;
+  const st=live?'<span class="buy">● LIVE</span>':`<span style="color:#f5a524">■ STALE</span> <small style="color:var(--mu)">${x.engine_running?'engine up, no fresh summary':'no session running'}${x.poll_failed?' · poll failed':''}</small>`;
+  return `<tr><td><b>${name}</b><br>${st}</td><td>${f(t.p50,3)} / ${f(t.p99,2)}</td><td>${f(a.p50,2)} / ${f(a.p99,2)}</td><td>${x.ping?f(x.ping.p50,2):'–'}</td><td>${f(x.ws_rtt,1)}</td><td>${x.session||'–'}</td><td>${N(t.n||0)} / ${N(a.n||0)}</td><td>${ist(x.lat_ts)}</td></tr>`};
+ const R=S.ref||{},rn=R.newsrv||{},rd=R.dc1||{},pr=(v)=>v?v[0]+' / '+v[1]:'–';
+ el.innerHTML=`<table><thead><tr><th>Server</th><th>Tick→decision p50 / p99 (ms)</th><th>Order send→ack p50 / p99 (ms)</th><th>Deribit TCP connect now (ms)</th><th>WS RTT (ms)</th><th>Session</th><th>Samples (decide / ack)</th><th>Numbers from (IST)</th></tr></thead><tbody>${row('newsrv','New server (x.x.x.139, tuned)')}${row('dc1','dc1 (current)')}
+ <tr style="color:var(--mu)"><td>Reference: new s321ns</td><td>${pr(rn.tick_to_decide)}</td><td>${pr(rn.written_to_ack)}</td><td>~${rn.ping||'–'}</td><td></td><td>s321ns</td><td></td><td>05 Nov</td></tr><tr style="color:var(--mu)"><td>Reference: dc1 baseline</td><td>${pr(rd.tick_to_decide)}</td><td>${pr(rd.written_to_ack)}</td><td></td><td></td><td>baseline</td><td></td><td></td></tr></tbody></table>`;
+ $('srvn').textContent='Percentiles come from the latest engine latency summary on each server. When no session is running, the last session\'s numbers are shown and marked STALE (never filled in from staging folders). Deribit connect time is measured live each poll. Collector polled '+ist(S.polled)+' IST'+(cs?' · COLLECTOR STALE':'')+'.'}
 function render(){
  const sel=$('inst'),cur=sel.value;sel.innerHTML=D.insts.map(i=>`<option>${i}</option>`).join('');if(cur)sel.value=cur;
  const ist=new Date(D.now*1000+19800000).toISOString().replace('T',' ').slice(0,19);$('asof').textContent='As of '+ist+' IST';
@@ -126,7 +136,7 @@ function render(){
   tr.innerHTML=`<td>${r.t.slice(11,23)}</td><td>${r.i}</td><td class="${r.s}">${r.s.toUpperCase()}</td><td>${r.p.toLocaleString('en-US',{minimumFractionDigits:1})}</td><td>${N(r.u)}</td><td class="buy">${r.r==null?'–':'+'+r.r.toFixed(4)}</td><td>${r.bp==null?'–':r.bp.toFixed(2)}</td>`;tb.insertBefore(tr,tb.firstChild)});
  while(tb.children.length>200)tb.removeChild(tb.lastChild);first=false;
  $('lastHr').textContent='Current hour: '+M(H[H.length-1][1],2);
- anim=0;draw();}
+ srvRender();anim=0;draw();}
 function draw(){
  const cv=$('ch'),dpr=devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext('2d');x.scale(dpr,dpr);
  let cv1=0,cr=0;const P=D.hourly.map(r=>[r[0],cv1+=r[1],cr+=r[2],r[1]]),n=P.length,pad=40,k=1-Math.pow(1-Math.min(1,anim),3);
